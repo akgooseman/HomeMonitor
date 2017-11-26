@@ -7,6 +7,7 @@
 #include <WiFiManager.h>
 #include <PubSubClient.h>
 #include <Bounce2.h>
+#include <ArduinoOTA.h>
 
 #define ZONE_CT 4
 #define TOPIC_BASE "717"
@@ -53,12 +54,13 @@ void setup() {
     pinMode(zonePin[i], INPUT_PULLUP);
     zoneBounce[i].attach(zonePin[i]);
   }
-
-    ArduinoOTA.onStart([]() {
-    Serial.println("Start");
+  
+  ArduinoOTA.setHostname("717");
+  ArduinoOTA.onStart([]() {
+    Serial.println("Update start");
   });
   ArduinoOTA.onEnd([]() {
-    Serial.println("\nEnd");
+    Serial.println("\nUpdate dnd");
   });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
@@ -75,7 +77,6 @@ void setup() {
 }
 
 void setup_wifi() {
-
   delay(10);
   wifiManager.autoConnect("Bldg-Manager");
 }
@@ -127,6 +128,7 @@ void reconnect() {
 
 char* status="";
 void loop() {
+  blink();
   ArduinoOTA.handle();
   waterBounce.update();
   boilerFaultBounce.update();
@@ -214,6 +216,23 @@ void sendStatus() {
     } else {
       client.publish(topic,"Off");
     }
+  }
+}
+
+unsigned long int nextMillis = 0;
+#define shortBlink 50
+#define longBlink 1950
+void blink() {
+  if ( millis()  > nextMillis ) {
+    //if ( digitalRead(BUILTIN_LED) ) {
+    //  digitalWrite(BUILTIN_LED, false);
+    //  nextMillis = millis() + shortBlink;
+    //} else {
+    //  digitalWrite(BUILTIN_LED, true);
+    //  nextMillis = millis() + longBlink;
+    //}
+    digitalWrite( BUILTIN_LED, !digitalRead(BUILTIN_LED));
+    nextMillis = millis() + (digitalRead(BUILTIN_LED) ? longBlink : shortBlink);
   }
 }
 
