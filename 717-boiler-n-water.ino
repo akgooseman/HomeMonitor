@@ -209,7 +209,7 @@ void sendStatus() {
   }
 
   for (i=0 ; i<=ZONE_CT-1 ; i++) {
-    snprintf(topic,50,"%s/status/boiler/zone/%ld", TOPIC_BASE, i);
+    snprintf(topic,50,"%s/status/zone/%ld", TOPIC_BASE, i);
     if ( zoneBounce[i].read() == false ){
       client.publish(topic,"On");
     } else {
