@@ -104,7 +104,7 @@ void reconnect() {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
     //hostname += String(ESP.getChipId(), HEX);
-    snprintf(msg, 75, "717-%ld", ESP.getChipId());
+    snprintf(msg, 75, "%s-%X", TOPIC_BASE, ESP.getChipId());
     if (client.connect(msg)) {
       Serial.println("connected");
       // Once connected, publish an announcement...
@@ -152,31 +152,31 @@ void loop() {
   }
 
   if ( waterBounce.fallingEdge() ) {
-    snprintf(topic,50,"%s/water", TOPIC_BASE);
+    snprintf(topic,50,"%s/event/water", TOPIC_BASE);
     Serial.print(topic);
     Serial.println(" Ding!");
     client.publish(topic, "ding");
   }
   if ( waterBounce.risingEdge() ) {
-    snprintf(topic,50,"%s/water", TOPIC_BASE);
+    snprintf(topic,50,"%s/event/water", TOPIC_BASE);
     Serial.print(topic);
     Serial.println(" Dong!");
     client.publish(topic, "dong");
   }
    if ( boilerFaultBounce.fallingEdge() ) {
-    snprintf(topic,50,"%s/boiler", TOPIC_BASE);
+    snprintf(topic,50,"%s/event/boiler", TOPIC_BASE);
     Serial.print(topic);
     Serial.println(" DOWN!");
     client.publish(topic, "DOWN");
   }
   if ( boilerFaultBounce.risingEdge() ) {
-    snprintf(topic,50,"%s/boiler", TOPIC_BASE);
+    snprintf(topic,50,"%s/event/boiler", TOPIC_BASE);
     Serial.print(topic);
     Serial.println(" Up!");
     client.publish(topic, "UP");
   }
   for (i=0; i<=ZONE_CT-1; i++) {
-    snprintf(topic,50,"%s/zone/%ld",TOPIC_BASE, i);
+    snprintf(topic,50,"%s/event/zone/%ld",TOPIC_BASE, i);
     if ( zoneBounce[i].fallingEdge() ) {
       Serial.print("Zone ");
       Serial.print(i);
