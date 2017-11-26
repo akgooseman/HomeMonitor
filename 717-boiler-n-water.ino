@@ -17,8 +17,7 @@ const char* mqtt_server = "54.149.169.61";
 
 int LED = D0;
 int wifiReset = D1;
-int waterPin  = D2;
-//int boilerPin = D3;
+int waterPin  = D10;
 int boilerFaultPin = D3;
 int zonePin[] = {D5, D6, D7, D4};
 
@@ -31,7 +30,6 @@ Bounce zoneBounce[] = {
   Bounce(zonePin[3], 50),  
 };
 
-WiFiManager wifiManager;
 WiFiClient espClient;
 PubSubClient client(espClient);
 long lastMsg = 0;
@@ -43,9 +41,14 @@ int i = 0;           // general use index
 void setup() {
   pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
   Serial.begin(9600);
-  setup_wifi();
+  // Set up WiFi manager
+  WiFiManager wifiManager;
+  wifiManager.autoConnect("HotMess");
+
+  // Set up MQTT client
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
+
   pinMode(waterPin,INPUT_PULLUP);
   
   waterBounce.attach(waterPin);
@@ -55,7 +58,7 @@ void setup() {
     zoneBounce[i].attach(zonePin[i]);
   }
   
-  ArduinoOTA.setHostname("717");
+  ArduinoOTA.setHostname("717Boiler");
   ArduinoOTA.onStart([]() {
     Serial.println("Update start");
   });
@@ -76,11 +79,6 @@ void setup() {
   ArduinoOTA.begin();
 }
 
-void setup_wifi() {
-  delay(10);
-  wifiManager.autoConnect("Bldg-Manager");
-}
-
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -98,7 +96,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
   } else {
     digitalWrite(BUILTIN_LED, HIGH);  // Turn the LED off by making the voltage HIGH
   }
-
 }
 
 void reconnect() {
@@ -106,7 +103,9 @@ void reconnect() {
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
-    if (client.connect("717-reporting")) {
+    //hostname += String(ESP.getChipId(), HEX);
+    snprintf(msg, 75, "717-%ld", ESP.getChipId());
+    if (client.connect(msg)) {
       Serial.println("connected");
       // Once connected, publish an announcement...
       client.publish(TOPIC_BASE, "hello world");
@@ -221,7 +220,7 @@ void sendStatus() {
 
 unsigned long int nextMillis = 0;
 #define shortBlink 50
-#define longBlink 1950
+#define longBlink 4950
 void blink() {
   if ( millis()  > nextMillis ) {
     //if ( digitalRead(BUILTIN_LED) ) {
