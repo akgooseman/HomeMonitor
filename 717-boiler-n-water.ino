@@ -51,6 +51,7 @@ void setup() {
   client.setCallback(callback);
 
   pinMode(waterPin,INPUT_PULLUP);
+  pinMode(boilerFaultPin, INPUT_PULLUP);
   
   waterBounce.attach(waterPin);
   boilerFaultBounce.attach(boilerFaultPin);
