@@ -1,7 +1,6 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
-#include <ArduinoOTA.h>
 #include <DNSServer.h>
 #include <ESP8266WebServer.h>
 #include <WiFiManager.h>
@@ -15,11 +14,13 @@
 // IP or dns name of mqtt server
 const char* mqtt_server = "54.149.169.61";
 
-int LED = D0;
-int wifiReset = D1;
+// don't bother
+// int LED = D0;
+// don't bother 
+// int wifiReset = D1;
 int waterPin  = D10;
-int boilerFaultPin = D3;
-int zonePin[] = {D5, D6, D7, D4};
+int boilerFaultPin = D1;
+int zonePin[] = {D2, D5, D6, D7};
 
 Bounce waterBounce;
 Bounce boilerFaultBounce;
@@ -223,13 +224,6 @@ unsigned long int nextMillis = 0;
 #define longBlink 4950
 void blink() {
   if ( millis()  > nextMillis ) {
-    //if ( digitalRead(BUILTIN_LED) ) {
-    //  digitalWrite(BUILTIN_LED, false);
-    //  nextMillis = millis() + shortBlink;
-    //} else {
-    //  digitalWrite(BUILTIN_LED, true);
-    //  nextMillis = millis() + longBlink;
-    //}
     digitalWrite( BUILTIN_LED, !digitalRead(BUILTIN_LED));
     nextMillis = millis() + (digitalRead(BUILTIN_LED) ? longBlink : shortBlink);
   }
