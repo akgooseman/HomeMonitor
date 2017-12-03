@@ -12,12 +12,13 @@
 #define TOPIC_BASE "717"
 
 // IP or dns name of mqtt server
-const char* mqtt_server = "54.149.169.61";
+//const char* mqtt_server = "oregon.redwinos.com";
+const char* mqtt_server = "52.41.77.47";
 
 // don't bother
 // int LED = D0;
 // don't bother 
-// int wifiReset = D1;
+int wifiResetPin = 10;  //GPIO10
 int waterPin  = D10;
 int boilerFaultPin = D1;
 int zonePin[] = {D2, D5, D6, D7};
@@ -42,14 +43,28 @@ int i = 0;           // general use index
 void setup() {
   pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
   Serial.begin(9600);
+  Serial.println("Starting up...");
   // Set up WiFi manager
   WiFiManager wifiManager;
-  wifiManager.autoConnect("HotMess");
-
+  pinMode(wifiResetPin, INPUT_PULLUP);
+  if ( digitalRead(wifiResetPin) ) {
+    Serial.println("Auto-connect network");
+    wifiManager.autoConnect("HotMess");
+    Serial.println("Autoconnect success!");
+  } else {
+    //GPIO "resetNetworkPin" grounded
+    Serial.println("Force network reconfig");
+    ESP.eraseConfig();
+    wifiManager.startConfigPortal("HotMess");
+    Serial.println("Network reconfig success!");
+  }
+  
   // Set up MQTT client
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
+  Serial.println("MQTT is set up");
 
+  
   pinMode(waterPin,INPUT_PULLUP);
   pinMode(boilerFaultPin, INPUT_PULLUP);
   
@@ -59,6 +74,7 @@ void setup() {
     pinMode(zonePin[i], INPUT_PULLUP);
     zoneBounce[i].attach(zonePin[i]);
   }
+  Serial.println("Pins are set up");
   
   ArduinoOTA.setHostname("717Boiler");
   ArduinoOTA.onStart([]() {
@@ -79,6 +95,7 @@ void setup() {
     else if (error == OTA_END_ERROR) Serial.println("End Failed");
   });
   ArduinoOTA.begin();
+  Serial.println("OTA is set up");
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -118,9 +135,12 @@ void reconnect() {
       Serial.print(client.state());
       Serial.println(" try again in 5 seconds");
       // Wait 5 seconds before retrying
-      for (i=0 ; i<5 ; i++) {
+      for (i=0 ; i<50 ; i++) {
         digitalWrite(BUILTIN_LED, LOW);
         delay(100);
+        // make sure we can do updates while trying to connect to MQTT broker
+        Serial.println("OTA Handler");
+        ArduinoOTA.handle();
         digitalWrite(BUILTIN_LED, HIGH);
       }
     }
