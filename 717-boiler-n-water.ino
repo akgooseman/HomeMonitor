@@ -7,16 +7,20 @@
 #include <PubSubClient.h>
 #include <Bounce2.h>
 #include <ArduinoOTA.h>
+#include <OneWire.h>
 
 #define ZONE_CT 4
 #define TOPIC_BASE "717"
+
+#define DS1820Pin 10  //GPIO10
+OneWire ds(DS1820Pin);
 
 // IP or dns name of mqtt server
 const char* mqtt_server = "oregon.redwinos.com";
 
 // don't bother
 int LED = D0;
-int wifiResetPin = 10;  //GPIO10
+//int wifiResetPin = 10;  //GPIO10
 // Don't use D10, interferes with Serial transmit.
 int waterPin  = D9;
 int boilerFaultPin = D1;
@@ -49,13 +53,14 @@ void setup() {
   
   // Set up MQTT client
   client.setServer(mqtt_server, 1883);
-  client.setCallback(callback);
+  //client.setCallback(callback);
   Serial.println("MQTT is set up");
 
   
   pinMode(waterPin,INPUT_PULLUP);
   pinMode(boilerFaultPin, INPUT_PULLUP);
-  
+  pinMode(DS1820Pin, INPUT_PULLUP);
+    
   waterBounce.attach(waterPin);
   boilerFaultBounce.attach(boilerFaultPin);
   for (i=0; i<=ZONE_CT-1 ; i++) {
@@ -94,8 +99,9 @@ void setupOTA() {
 void setupWifi() {
   delay(10);
   WiFiManager wifiManager;
-  pinMode(wifiResetPin, INPUT_PULLUP);
-  if ( digitalRead(wifiResetPin) ) {
+  //pinMode(wifiResetPin, INPUT_PULLUP);
+  // force true, skip network reset
+  if ( true ) {      //  digitalRead(wifiResetPin) ) {
     Serial.println("Auto-connect network");
     wifiManager.autoConnect("HotMess");
     Serial.println("Autoconnect success!");
@@ -105,25 +111,6 @@ void setupWifi() {
     ESP.eraseConfig();
     wifiManager.startConfigPortal("HotMess");
     Serial.println("Network reconfig success!");
-  }
-}
-
-void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-  }
-  Serial.println();
-
-  // Switch on the LED if an 1 was received as first character
-  if ((char)payload[0] == '1') {
-    digitalWrite(BUILTIN_LED, LOW);   // Turn the LED on (Note that LOW is the voltage level
-    // but actually the LED is on; this is because
-    // it is acive low on the ESP-01)
-  } else {
-    digitalWrite(BUILTIN_LED, HIGH);  // Turn the LED off by making the voltage HIGH
   }
 }
 
@@ -150,7 +137,7 @@ void reconnect() {
         delay(100);
         // make sure we can do updates while trying to connect to MQTT broker
         Serial.println("OTA Handler");
-        //ArduinoOTA.handle();
+        ArduinoOTA.handle();
         digitalWrite(BUILTIN_LED, HIGH);
       }
     }
@@ -175,8 +162,8 @@ void loop() {
   if (now - lastMsg > 60000) {
     lastMsg = now;
     ++value;
-    snprintf (msg, 75, "hello world #%ld", value);
-    snprintf(topic, 75, "%s/hello", TOPIC_BASE);
+    snprintf (msg, 75, "hello world %ld", value);
+    snprintf(topic, 75, "%s/hello/boiler", TOPIC_BASE);
     Serial.print("Publish message: ");
     Serial.println(msg);
     client.publish(topic, msg);
@@ -232,6 +219,11 @@ void loop() {
 }
 
 void sendStatus() {
+  sendBoiler();
+  sendTemp();
+}
+
+void sendBoiler(void) {
   // send boiler status on demand
   snprintf(topic, 50, "%s/status/boiler/fault", TOPIC_BASE);
   if ( boilerFaultBounce.read() == true ) {
@@ -248,6 +240,110 @@ void sendStatus() {
       client.publish(topic,"Off");
     }
   }
+}
+
+void sendTemp() {
+    double tempurature = getTemp();
+    dtostrf(tempurature, 5,2, msg);
+    Serial.print("Tempurature: ");
+    Serial.println(msg);
+    snprintf(topic, 50, "%s/status/boiler/temp", TOPIC_BASE);
+    client.publish(topic,msg);
+}
+
+
+double getTemp(void) {  
+  byte i;
+  byte present = 0;
+  byte type_s;
+  byte data[12];
+  byte addr[8];
+  float celsius, fahrenheit;
+  char buf[100];
+  
+  while ( ds.search(addr)) {
+  
+    Serial.print("ROM = ");
+    Serial.println(topic);
+    if (OneWire::crc8(addr, 7) != addr[7]) {
+        Serial.println("CRC is not valid!");
+        return 998;
+    }
+ 
+    // the first ROM byte indicates which chip
+    switch (addr[0]) {
+      case 0x10:
+        Serial.println("  Chip = DS18S20");  // or old DS1820
+        type_s = 1;
+        break;
+      case 0x28:
+        //Serial.println("  Chip = DS18B20");
+        type_s = 0;
+        break;
+      case 0x22:
+        Serial.println("  Chip = DS1822");
+        type_s = 0;
+        break;
+      default:
+        Serial.println("Device is not a DS18x20 family device.");
+        return 997;
+    } 
+
+    ds.reset();
+    ds.select(addr);
+    ds.write(0x44, 1);        // start conversion, with parasite power on at the end
+  
+    delay(1000);     // maybe 750ms is enough, maybe not
+    // we might do a ds.depower() here, but the reset will take care of it.
+  
+    present = ds.reset();
+    ds.select(addr);    
+    ds.write(0xBE);         // Read Scratchpad
+
+    //Serial.print("  Data = ");
+    //Serial.print(present, HEX);
+    //Serial.print(" ");
+    for ( i = 0; i < 9; i++) {           // we need 9 bytes
+      data[i] = ds.read();
+      //Serial.print(data[i], HEX);
+      //Serial.print(" ");
+    }
+    //Serial.print(" CRC=");
+    //Serial.print(OneWire::crc8(data, 8), HEX);
+    //Serial.println();
+
+    // Convert the data to actual temperature
+    // because the result is a 16 bit signed integer, it should
+    // be stored to an "int16_t" type, which is always 16 bits
+    // even when compiled on a 32 bit processor.
+    int16_t raw = (data[1] << 8) | data[0];
+    if (type_s) {
+      raw = raw << 3; // 9 bit resolution default
+      if (data[7] == 0x10) {
+        // "count remain" gives full 12 bit resolution
+        raw = (raw & 0xFFF0) + 12 - data[6];
+      }
+    } else {
+      byte cfg = (data[4] & 0x60);
+      // at lower res, the low bits are undefined, so let's zero them
+      if (cfg == 0x00) raw = raw & ~7;  // 9 bit resolution, 93.75 ms
+      else if (cfg == 0x20) raw = raw & ~3; // 10 bit res, 187.5 ms
+      else if (cfg == 0x40) raw = raw & ~1; // 11 bit res, 375 ms
+      //// default is 12 bit resolution, 750 ms conversion time
+    }
+    celsius = (float)raw / 16.0;
+    fahrenheit = celsius * 1.8 + 32.0;
+    Serial.print("  Temperature = ");
+    Serial.print(celsius);
+    Serial.print(" Celsius, ");
+    Serial.print(fahrenheit);
+    Serial.println(" Fahrenheit");
+  }
+  Serial.println("No more addresses.");
+  Serial.println();
+  ds.reset_search();
+  delay(250);
+  return fahrenheit;
 }
 
 unsigned long int nextMillis = 0;
